@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Agents</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e4e3df;
+    --accent: #c2410c; --accent-soft: #fdeee6; --ok: #15803d; --warn: #b45309; --err: #b91c1c;
+    --code: #f1f0ec; --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9a9993; --line: #2e2d2a;
+      --accent: #f97316; --accent-soft: #3a2416; --ok: #4ade80; --warn: #fbbf24; --err: #f87171; --code: #262522;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line);
+           background: var(--panel); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  header h1 span { color: var(--accent); }
+  .tabs { display: flex; gap: 4px; background: var(--code); padding: 3px; border-radius: 8px; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 6px;
+                 cursor: pointer; font: inherit; }
+  .tabs button.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .meter { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: calc(100vh - 58px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } #activity { max-height: 50vh; } }
+  #convo { display: flex; flex-direction: column; min-height: 0; }
+  #messages { flex: 1; overflow-y: auto; padding: 20px max(16px, 4vw); }
+  .msg { max-width: 820px; margin: 0 auto 18px; }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .6px; }
+  .msg.user .body { background: var(--accent-soft); padding: 10px 14px; border-radius: var(--radius); white-space: pre-wrap; }
+  .msg.bot .body { background: var(--panel); border: 1px solid var(--line); padding: 12px 16px; border-radius: var(--radius); overflow-x: auto; }
+  .body pre { background: var(--code); padding: 10px; border-radius: 6px; overflow-x: auto; }
+  .body code { background: var(--code); padding: 1px 4px; border-radius: 4px; }
+  .body table { border-collapse: collapse; } .body td, .body th { border: 1px solid var(--line); padding: 4px 8px; }
+  .cites { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  form { display: flex; gap: 8px; padding: 14px max(16px, 4vw); border-top: 1px solid var(--line); background: var(--panel); }
+  textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px;
+             font: inherit; color: var(--ink); background: var(--bg); min-height: 46px; max-height: 200px; }
+  button.primary { border: 0; background: var(--accent); color: #fff; padding: 0 18px; border-radius: var(--radius);
+                   font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  #activity { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 14px; }
+  #activity h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 10px; }
+  .ev { border-left: 2px solid var(--line); padding: 4px 0 8px 10px; font-size: 13px; }
+  .ev .t { color: var(--muted); font-size: 11px; }
+  .ev.tool { border-color: var(--accent); } .ev.ok { border-color: var(--ok); }
+  .ev.warn { border-color: var(--warn); } .ev.err { border-color: var(--err); }
+  .ev details summary { cursor: pointer; } .ev pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0 0;
+                   background: var(--code); padding: 6px; border-radius: 6px; font-size: 12px; max-height: 220px; overflow: auto; }
+  .thinking { color: var(--muted); font-style: italic; }
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink);
+           max-width: min(560px, 92vw); }
+  dialog pre { background: var(--code); padding: 8px; border-radius: 6px; max-height: 300px; overflow: auto; white-space: pre-wrap; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; }
+  dialog button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>◆</span> Atlas</h1>
+  <div class="tabs" role="tablist">
+    <button class="active" data-mode="chat">Assistant</button>
+    <button data-mode="research">Research team</button>
+  </div>
+  <div class="meter" id="meter">$0.0000 · 0 calls · cache 0%</div>
+</header>
+<main>
+  <section id="convo">
+    <div id="messages"></div>
+    <form id="form">
+      <textarea id="input" placeholder="Ask anything - or switch to Research team for a full multi-agent report" rows="1"></textarea>
+      <button class="primary" id="send">Send</button>
+    </form>
+  </section>
+  <aside id="activity"><h2>Agent activity</h2><div id="events"></div></aside>
+</main>
+<dialog id="approval">
+  <h3 style="margin-top:0">Approval required</h3>
+  <p id="approval-text"></p>
+  <pre id="approval-input"></pre>
+  <div class="row"><button id="deny">Deny</button><button id="allow" class="primary" style="border:0">Allow</button></div>
+</dialog>
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "chat", sessionId = null, busy = false;
+const render = (md) => DOMPurify.sanitize(marked.parse(md || ""));  // model output is untrusted HTML
+
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); mode = b.dataset.mode;
+  $("input").placeholder = mode === "chat" ? "Ask anything" : "Describe a research objective for the agent team";
+});
+
+function addMsg(who, html, cls) {
+  const el = document.createElement("div");
+  el.className = `msg ${cls}`;
+  el.innerHTML = `<div class="who">${who}</div><div class="body"></div>`;
+  if (cls === "user") el.querySelector(".body").textContent = html; else el.querySelector(".body").innerHTML = html;
+  $("messages").appendChild(el); el.scrollIntoView({block: "end"});
+  return el.querySelector(".body");
+}
+
+function addEvent(cls, agent, title, detail) {
+  const el = document.createElement("div");
+  el.className = `ev ${cls}`;
+  const t = document.createElement("div"); t.className = "t"; t.textContent = agent; el.appendChild(t);
+  if (detail) {
+    const d = document.createElement("details"); const s = document.createElement("summary");
+    s.textContent = title; const p = document.createElement("pre"); p.textContent = detail;
+    d.append(s, p); el.appendChild(d);
+  } else { const s = document.createElement("div"); s.textContent = title; el.appendChild(s); }
+  $("events").prepend(el);
+  return el;
+}
+
+const thinkingEls = {};
+function onEvent(ev, botBody, acc) {
+  const d = ev.data || {}, a = ev.agent;
+  switch (ev.type) {
+    case "text_delta":
+      if (a === "assistant" || a === "writer") { acc.text += d.text; botBody.innerHTML = render(acc.text); }
+      break;
+    case "thinking_delta": {
+      thinkingEls[a] = thinkingEls[a] || addEvent("", a, "thinking…", " ");
+      const pre = thinkingEls[a].querySelector("pre"); pre.textContent += d.text; break;
+    }
+    case "tool_call": delete thinkingEls[a]; addEvent("tool", a, `→ ${d.name}`, JSON.stringify(d.input, null, 2)); break;
+    case "tool_result": addEvent(d.is_error ? "err" : "ok", a, `← ${d.name} (${d.duration_ms} ms)`, d.preview); break;
+    case "server_tool": delete thinkingEls[a]; addEvent("tool", a, `☁ ${d.name}`, JSON.stringify(d.input, null, 2)); break;
+    case "plan": addEvent("", a, `Plan: ${d.plan.subtasks.length} subtasks`, d.plan.subtasks.map(t => `${t.id} [${t.specialist}] ${t.title}${t.depends_on.length ? "  ← " + t.depends_on.join(",") : ""}`).join("\n")); break;
+    case "worker_start": addEvent("", a, `▶ ${d.worker}: ${d.title}`); break;
+    case "worker_end": addEvent(d.status === "completed" ? "ok" : "warn", a, `■ ${d.worker} ${d.status}`); break;
+    case "critique": addEvent(d.passes ? "ok" : "warn", a, `Critique round ${d.round}: ${d.score}/10`, (d.issues || []).join("\n")); if (!d.passes) { acc.text = ""; } break;
+    case "usage": $("meter").textContent = `$${d.total_usd.toFixed(4)} · ${d.calls} calls · cache ${(d.cache_hit_ratio * 100).toFixed(0)}%`; break;
+    case "guardrail": addEvent("warn", a, `Guardrail (${d.stage})`, (d.findings || []).join("\n")); break;
+    case "refusal": addEvent("err", a, "Model declined the request", JSON.stringify(d.details)); break;
+    case "warning": addEvent("warn", a, d.message); break;
+    case "approval_request": askApproval(d, a); break;
+    case "approval_result": addEvent(d.approved ? "ok" : "warn", a, `${d.approved ? "Approved" : "Denied"}: ${d.tool}`); break;
+    case "error": addEvent("err", a, d.message); botBody.innerHTML += `<p style="color:var(--err)">${DOMPurify.sanitize(d.message)}</p>`; break;
+    case "done":
+      if (d.session_id) sessionId = d.session_id;
+      const final = d.text ?? d.report; if (final) botBody.innerHTML = render(final);
+      if (d.citations && d.citations.length) {
+        const c = document.createElement("div"); c.className = "cites";
+        c.textContent = "Sources: " + [...new Set(d.citations.map(x => x.source || x.url || x.document_title).filter(Boolean))].join(" · ");
+        botBody.appendChild(c);
+      }
+      addEvent("ok", "system", `Done · trace ${d.trace_id}`); break;
+  }
+}
+
+function askApproval(d, agent) {
+  $("approval-text").textContent = `${agent} wants to run "${d.tool}".`;
+  $("approval-input").textContent = JSON.stringify(d.input, null, 2);
+  const dlg = $("approval");
+  const answer = async (approved) => {
+    dlg.close();
+    await fetch(`/api/approvals/${d.id}`, {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({approved, reason: approved ? "approved in UI" : "denied in UI"})});
+  };
+  $("allow").onclick = () => answer(true); $("deny").onclick = () => answer(false);
+  dlg.showModal();
+}
+
+async function send(text) {
+  busy = true; $("send").disabled = true;
+  addMsg("You", text, "user");
+  const botBody = addMsg(mode === "chat" ? "Atlas" : "Research team", "<span class='thinking'>working…</span>", "bot");
+  const acc = {text: ""};
+  const url = mode === "chat" ? "/api/chat" : "/api/research";
+  const body = mode === "chat" ? {message: text, session_id: sessionId} : {objective: text};
+  try {
+    const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    while (true) {
+      const {value, done} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {   // SSE frames are separated by a blank line
+        const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+        const line = frame.split("\n").find(l => l.startsWith("data: "));
+        if (line) onEvent(JSON.parse(line.slice(6)), botBody, acc);
+      }
+    }
+  } catch (e) { botBody.innerHTML = `<p style="color:var(--err)">${DOMPurify.sanitize(String(e))}</p>`; }
+  busy = false; $("send").disabled = false;
+}
+
+$("form").onsubmit = (e) => { e.preventDefault(); const t = $("input").value.trim(); if (t && !busy) { $("input").value = ""; send(t); } };
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });
+</script>
+</body>
+</html>
